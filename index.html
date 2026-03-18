@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Radius Block Game</title>
+</head>
+
+<body style="margin:0;height:100vh;width:100vw;overflow:hidden;background:#111;color:white;font-family:sans-serif;">
+<div id="startMenu" style="
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.9); display: flex; flex-direction: column;
+    align-items: center; justify-content: center; z-index: 100;">
+    <h1 style="font-size: 60px; margin-bottom: 20px;">BLOCK DODGE</h1>
+    <button id="startBtn" style="
+        padding: 15px 40px; font-size: 24px; font-weight: bold;
+        background: red; color: white; border: none; cursor: pointer;
+        border-radius: 5px;">START GAME</button>
+</div>
+<div id="char" style="width:20px;height:20px;background:red;position:absolute;"></div>
+
+<div id="countdown" style="
+position:absolute;
+top:50%;
+left:50%;
+transform:translate(-50%,-50%);
+font-size:80px;
+font-weight:bold;
+">
+3
+</div>
+<div id="scoreDisplay" style="position:absolute; top:20px; left:20px; font-size:24px; font-weight:bold; z-index:10; pointer-events:none;">
+    Score: 0<br>
+    <span style="font-size:16px; opacity:0.7;">Best: <span id="highScore">0</span></span>
+</div>
+<div id="spawnPoint" style="
+    width: 40px; 
+    height: 40px; 
+    border: 2px dashed rgba(255,255,255,0.3); 
+    border-radius: 50%; 
+    position: absolute; 
+    top: 49%; 
+    left: 49%; 
+    pointer-events: none;
+"></div>
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+
+const char = document.getElementById("char");
+const countdown = document.getElementById("countdown");
+const scoreDisplay = document.getElementById("scoreDisplay");
+const highScoreElement = document.getElementById("highScore");
+const startMenu = document.getElementById("startMenu");
+const startBtn = document.getElementById("startBtn");
+
+countdown.style.display = "none"; 
+
+let highScore = localStorage.getItem("radiusGameHighScore") || 0;
+highScoreElement.textContent = highScore;
+
+let startTime;
+
+let x = window.innerWidth/2;
+let y = window.innerHeight/2;
+let charSize = 20; 
+const growthRate = 0.02; 
+
+const speed = 4;
+const keys = {};
+const blocks = [];
+
+let gameStarted = false;
+
+char.style.left = x + "px";
+char.style.top = y + "px";
+
+document.addEventListener("keydown", e => keys[e.key] = true);
+document.addEventListener("keyup", e => keys[e.key] = false);
+
+function spawnBlock(){
+    const block = document.createElement("div");
+
+    // Randomize width and height independently (between 10 and 60px)
+    const rw = Math.floor(Math.random() * 51) + 10; 
+    const rh = Math.floor(Math.random() * 51) + 10; 
+
+    block.style.width = rw + "px";
+    block.style.height = rh + "px";
+    block.style.background = "white";
+    block.style.position = "absolute";
+
+    let bx = window.innerWidth/2;
+    let by = window.innerHeight/2;
+
+    block.style.left = bx + "px";
+    block.style.top = by + "px";
+
+    document.body.appendChild(block);
+
+    const angle = Math.random() * Math.PI * 2;
+    const vx = Math.cos(angle) * 3;
+    const vy = Math.sin(angle) * 3;
+
+    // Store both w and h for the collision check
+    blocks.push({el:block, x:bx, y:by, vx, vy, w: rw, h: rh});
+}
+
+let spawnDelay = 800; // starting delay
+const minDelay = 120; // fastest spawn limit
+const acceleration = 0.97; // difficulty increase
+
+function spawnLoop(){
+
+    spawnBlock();
+
+    // make spawning faster
+    spawnDelay *= acceleration;
+
+    if(spawnDelay < minDelay){
+        spawnDelay = minDelay;
+    }
+
+    setTimeout(spawnLoop, spawnDelay);
+}
+function checkCollision(ax, ay, aw, ah, bx, by, bw, bh){
+    return ax < bx + bw &&
+           ax + aw > bx &&
+           ay < by + bh &&
+           ay + ah > by;
+}
+
+function update(){
+    if(gameStarted){
+        if(keys["w"]) y -= speed;
+        if(keys["s"]) y += speed;
+        if(keys["a"]) x -= speed;
+        if(keys["d"]) x += speed;
+
+        if (x < 0) x = 0;
+        if (y < 0) y = 0;
+        if (x > window.innerWidth - charSize) x = window.innerWidth - charSize;
+        if (y > window.innerHeight - charSize) y = window.innerHeight - charSize
+        // 2. GROW THE PLAYER SQUARE HERE
+        charSize += growthRate;
+        char.style.width = charSize + "px";
+        char.style.height = charSize + "px";
+        
+        char.style.left = x + "px";
+        char.style.top = y + "px";
+
+        const elapsedSeconds = (Date.now() - startTime) / 1000;
+        const currentScore = Math.max(0, Math.floor((elapsedSeconds * ((charSize - 20)/100)) + elapsedSeconds));
+        scoreDisplay.textContent = "Score: " + currentScore;
+
+        blocks.forEach(b => {
+            b.x += b.vx;
+            b.y += b.vy;
+
+            b.el.style.left = b.x + "px";
+            b.el.style.top = b.y + "px";
+
+            if(checkCollision(x, y, charSize, charSize, b.x, b.y, b.w, b.h)){
+                gameStarted = false; // Stop the game logic immediately
+
+                // 1. REMOVE ALL BLOCKS FROM THE SCREEN
+                blocks.forEach(blockObj => {
+                    blockObj.el.remove();
+                });
+                blocks.length = 0; // Clear the array
+
+                // 2. CALCULATE FINAL SCORE
+                const seconds = (Date.now() - startTime) / 1000;
+                const finalScore = Math.floor((charSize - 20) * seconds);
+                
+                // Save High Score
+                if(finalScore > highScore) {
+                    localStorage.setItem("radiusGameHighScore", finalScore);
+                    alert(`NEW HIGH SCORE! \nScore: ${finalScore}`);
+                } else {
+                    alert(`Game Over! \nScore: ${finalScore}`);
+                }
+
+                location.reload();
+            }
+        });
+    }
+    requestAnimationFrame(update);
+}
+
+
+update();
+
+/* COUNTDOWN */
+
+startBtn.addEventListener("click", () => {
+    startMenu.style.display = "none"; // Hide the menu
+    countdown.style.display = "block"; // Show the countdown
+    startCountdown(); // Call a function to start the timer
+});
+
+function startCountdown() {
+    let time = 3;
+    countdown.textContent = time;
+
+    const timer = setInterval(() => {
+        time--;
+        if (time > 0) {
+            countdown.textContent = time;
+        } else if (time === 0) {
+            countdown.textContent = "GO!";
+            gameStarted = true;
+            startTime = Date.now();
+        } else {
+            clearInterval(timer);
+            countdown.style.display = "none";
+            setTimeout(() => spawnLoop(), 1000);
+        }
+    }, 1000);
+}
+});
+</script>
+
+</body>
+</html>
