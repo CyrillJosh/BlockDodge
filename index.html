@@ -71,6 +71,8 @@ const blocks = [];
 
 let gameStarted = false;
 
+let dashCooldown = 0;
+
 char.style.left = x + "px";
 char.style.top = y + "px";
 
@@ -79,7 +81,17 @@ document.addEventListener("keyup", e => keys[e.key] = false);
 
 function spawnBlock(){
     const block = document.createElement("div");
-
+    
+    const type = Math.random();
+    if(type < 0.3){
+        vx *= 2; vy *= 2; // fast
+        block.style.background = "orange";
+    } else if(type < 0.6){
+        block.style.background = "cyan"; // slow
+    } else {
+        block.homing = true;
+        block.style.background = "purple";
+    }
     // Randomize width and height independently (between 10 and 60px)
     const rw = Math.floor(Math.random() * 51) + 10; 
     const rh = Math.floor(Math.random() * 51) + 10; 
@@ -131,16 +143,45 @@ function checkCollision(ax, ay, aw, ah, bx, by, bw, bh){
 
 function update(){
     if(gameStarted){
-        if(keys["w"]) y -= speed;
-        if(keys["s"]) y += speed;
-        if(keys["a"]) x -= speed;
-        if(keys["d"]) x += speed;
+        let lastDir = {x: 0, y: -1}; // default up
+        if(keys["w"]){
+            lastDir = {x:0,y:-1}
+            y -= speed;
+        } 
+        if(keys["s"])
+        {
+            lastDir = {x:0,y:1};
+            y += speed;
+        }
+        if(keys["a"])
+        {
+            lastDir = {x:-1,y:0};
+            x -= speed;
+        }
+        if(keys["d"]){
+            lastDir = {x:1,y:0};
+            x += speed;
+        } 
+
+        if(keys[" "] && dashCooldown <= 0){
+            x += lastDir.x * 100;
+            y += lastDir.y * 100;
+            dashCooldown = 60;
+        }
+
+        if(dashCooldown > 0) dashCooldown--;
 
         if (x < 0) x = 0;
         if (y < 0) y = 0;
         if (x > window.innerWidth - charSize) x = window.innerWidth - charSize;
         if (y > window.innerHeight - charSize) y = window.innerHeight - charSize
-        // 2. GROW THE PLAYER SQUARE HERE
+        if(b.homing){
+            const dx = x - b.x;
+            const dy = y - b.y;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            b.vx += dx/dist * 0.1;
+            b.vy += dy/dist * 0.1;
+        }
         charSize += growthRate;
         char.style.width = charSize + "px";
         char.style.height = charSize + "px";
